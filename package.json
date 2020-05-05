@@ -1,0 +1,28 @@
+{
+	"name": "pagepark",
+	"description": "Core routines for the PagePark web server, in a package.",
+	"author": "Dave Winer <dave@scripting.com>",
+	"version": "0.4.0",
+	"scripts": {
+		"start": "node pagepark.js"
+			},
+	"main": "pageparkpackage.js",
+	"files": [
+		"pageparkpackage.js",
+		"pageparkpackage.opml"
+		],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/scripting/pageParkPackage.git"
+		},
+	"dependencies" : {
+		"daveutils": "*",
+		"davefilesystem": "*",
+		"child_process": "*",
+		"require-from-string": "*"
+		}, 
+	"license": "MIT",
+	"engines": {
+		"node": "0.10.*"
+		}
+	}
