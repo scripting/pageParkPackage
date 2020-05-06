@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.1";   
+var myProductName = "pageParkPackage", myVersion = "0.4.3";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -69,7 +69,6 @@ function runScript (f) {
 	}
 function loopOverFolder (nameSubFolder, fileCallback) {
 	var folder = config.nameScriptsFolder + "/" + nameSubFolder + "/";
-	console.log ("loopOverFolder: folder == " + folder);
 	filesystem.sureFilePath (folder + "x", function () {
 		fs.readdir (folder, function (err, theListOfFiles) {
 			if (err) {
