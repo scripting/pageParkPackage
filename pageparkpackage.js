@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.0";   
+var myProductName = "pageParkPackage", myVersion = "0.4.1";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -7,6 +7,23 @@ const filesystem = require ("davefilesystem");
 const childProcess = require ("child_process");
 
 exports.runScript = runScript;
+exports.loopOverFolder = loopOverFolder;
+exports.start = start;
+
+const nameEverySecondFolder = "everySecond";
+const nameEveryMinuteFolder = "everyMinute";
+const nameEveryHourFolder = "everyHour";
+const nameOvernightFolder = "overnight";
+
+var config = {
+	minuteToRunHourlyScripts: 0,
+	hourToRunOvernightScripts: 0, 
+	nameScriptsFolder: "scripts",
+	localStoragePath: "data/localStorage.json"
+	};
+
+var localStorage = {
+	};
 
 function readJsonFile (path, callback) {
 	filesystem.sureFilePath (path, function () {
@@ -52,16 +69,80 @@ function runScript (f) {
 	}
 function loopOverFolder (nameSubFolder, fileCallback) {
 	var folder = config.nameScriptsFolder + "/" + nameSubFolder + "/";
+	console.log ("loopOverFolder: folder == " + folder);
 	filesystem.sureFilePath (folder + "x", function () {
 		fs.readdir (folder, function (err, theListOfFiles) {
-			theListOfFiles.forEach (function (f) {
-				if (utils.endsWith (f, ".js")) {
-					runScript (folder + f);
-					if (fileCallback !== undefined) {
-						fileCallback (f);
+			if (err) {
+				console.log ("loopOverFolder: err.message == " + err.message);
+				}
+			else {
+				theListOfFiles.forEach (function (f) {
+					if (utils.endsWith (f, ".js")) {
+						runScript (folder + f);
+						if (fileCallback !== undefined) {
+							fileCallback (f);
+							}
 						}
-					}
-				});
+					});
+				}
 			});
+		});
+	}
+
+function start (options, callback) {
+	function initFolders () {
+		function doFolder (name) {
+			filesystem.sureFilePath (config.nameScriptsFolder + "/" + name + "/x");
+			}
+		doFolder (nameEverySecondFolder);
+		doFolder (nameEveryMinuteFolder);
+		doFolder (nameEveryHourFolder);
+		doFolder (nameOvernightFolder);
+		}
+	function initLocalStorage (callback) {
+		readJsonFile (config.localStoragePath, function (theData) {
+			if (theData !== undefined) {
+				for (var x in theData) {
+					localStorage [x] = theData [x];
+					}
+				}
+			callback ();
+			});
+		}
+	function everySecond () {
+		loopOverFolder (nameEverySecondFolder);
+		writeJsonFile (config.localStoragePath, localStorage);
+		}
+	function everyMinute () {
+		var now = new Date ();
+		if (now.getMinutes () == config.minuteToRunHourlyScripts) {
+			everyHour ();
+			}
+		loopOverFolder (nameEveryMinuteFolder);
+		}
+	function everyHour () {
+		var now = new Date ();
+		if (now.getHours () == config.hourToRunOvernightScripts) {
+			loopOverFolder (nameOvernightFolder);
+			}
+		loopOverFolder (nameEveryHourFolder);
+		}
+	if (options !== undefined) {
+		for (var x in options) {
+			config [x] = options [x];
+			}
+		}
+	console.log ("\nstarting " + myProductName + " v" + myVersion + ". config == " + utils.jsonStringify (config) + "\n");
+	
+	if (config.flRunChronologicalScripts) {
+		initFolders ();
+		setInterval (everySecond, 1000); 
+		utils.runEveryMinute (everyMinute);
+		}
+	
+	initLocalStorage (function () {
+		if (callback !== undefined) {
+			callback ();
+			}
 		});
 	}

@@ -1,0 +1,14 @@
+{
+	"name": "testpageparkpackage",
+	"description": "First test app for pagePark package. Test script-running ability.",
+	"author": "Dave Winer <dave@scripting.com>",
+	"version": "0.4.0",
+	"dependencies" : {
+		"daveutils": "*",
+		"pagepark": "*"
+		}, 
+	"license": "MIT",
+	"engines": {
+		"node": "*"
+		}
+	}
