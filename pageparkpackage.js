@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.3";   
+var myProductName = "pageParkPackage", myVersion = "0.4.7";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -6,7 +6,7 @@ const requireFromString = require ("require-from-string");
 const filesystem = require ("davefilesystem"); 
 const childProcess = require ("child_process");
 
-exports.runScript = runScript;
+exports.runJavaScriptCode = runJavaScriptCode;
 exports.loopOverFolder = loopOverFolder;
 exports.start = start;
 
@@ -18,13 +18,12 @@ const nameOvernightFolder = "overnight";
 var config = {
 	minuteToRunHourlyScripts: 0,
 	hourToRunOvernightScripts: 0, 
-	nameScriptsFolder: "scripts",
-	localStoragePath: "data/localStorage.json"
+	scriptsFolderPath: "prefs/scripts/",
+	localStoragePath: "prefs/localStorage.json"
 	};
 
 var localStorage = {
 	};
-
 function readJsonFile (path, callback) {
 	filesystem.sureFilePath (path, function () {
 		fs.readFile (path, function (err, data) {
@@ -49,26 +48,34 @@ function writeJsonFile (path, data) {
 			});
 		});
 	}
-function runScript (f) {
-	var noderunner = { //functions called-scripts can use to access functionality within noderunner
-		utils, //scripts have access to all of utils
+
+function runJavaScriptCode (f, options) { //5/9/20 by DW
+	const system = { //tools that are available to all script code
 		unixShellCommand: function (theCommand) {
 			return (childProcess.execSync (theCommand));
 			}
 		};
-	var leftcode = "module.exports = function (localStorage, noderunner) {", rightcode = "}";
-	fs.readFile (f, function (err, moduletext) {
+	if (options === undefined) {
+		options = new Object ();
+		}
+	var leftcode = "module.exports = function (options, localStorage, system) {", rightcode = "}";
+	fs.readFile (f, function (err, scripttext) {
 		if (err) {
-			console.log ("runScript: err.message == " + err.message);
+			console.log ("runJavaScriptCode: err.message == " + err.message);
 			}
 		else {
-			var code = leftcode + moduletext.toString () + rightcode;
-			requireFromString (code) (localStorage, noderunner);
+			try {
+				var code = leftcode + scripttext.toString () + rightcode;
+				requireFromString (code) (options, localStorage, system);
+				}
+			catch (err) {
+				console.log ("runJavaScriptCode: err.message == " + err.message);
+				}
 			}
 		});
 	}
 function loopOverFolder (nameSubFolder, fileCallback) {
-	var folder = config.nameScriptsFolder + "/" + nameSubFolder + "/";
+	var folder = config.scriptsFolderPath + nameSubFolder + "/";
 	filesystem.sureFilePath (folder + "x", function () {
 		fs.readdir (folder, function (err, theListOfFiles) {
 			if (err) {
@@ -77,7 +84,7 @@ function loopOverFolder (nameSubFolder, fileCallback) {
 			else {
 				theListOfFiles.forEach (function (f) {
 					if (utils.endsWith (f, ".js")) {
-						runScript (folder + f);
+						runJavaScriptCode (folder + f);
 						if (fileCallback !== undefined) {
 							fileCallback (f);
 							}
@@ -91,7 +98,7 @@ function loopOverFolder (nameSubFolder, fileCallback) {
 function start (options, callback) {
 	function initFolders () {
 		function doFolder (name) {
-			filesystem.sureFilePath (config.nameScriptsFolder + "/" + name + "/x");
+			filesystem.sureFilePath (config.scriptsFolderPath + name + "/x");
 			}
 		doFolder (nameEverySecondFolder);
 		doFolder (nameEveryMinuteFolder);
