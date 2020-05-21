@@ -2,10 +2,7 @@
 	"name": "pagepark",
 	"description": "Core routines for the PagePark web server, in a package.",
 	"author": "Dave Winer <dave@scripting.com>",
-	"version": "0.4.7",
-	"scripts": {
-		"start": "node pagepark.js"
-			},
+	"version": "0.4.24",
 	"main": "pageparkpackage.js",
 	"files": [
 		"pageparkpackage.js",
@@ -19,7 +16,9 @@
 		"daveutils": "*",
 		"davefilesystem": "*",
 		"child_process": "*",
-		"require-from-string": "*"
+		"require-from-string": "*",
+		"forever": "*",
+		"forever-monitor": "*"
 		}, 
 	"license": "MIT",
 	"engines": {
