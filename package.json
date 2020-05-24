@@ -2,7 +2,7 @@
 	"name": "pagepark",
 	"description": "Core routines for the PagePark web server, in a package.",
 	"author": "Dave Winer <dave@scripting.com>",
-	"version": "0.4.24",
+	"version": "0.4.25",
 	"main": "pageparkpackage.js",
 	"files": [
 		"pageparkpackage.js",

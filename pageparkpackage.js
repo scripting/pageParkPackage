@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.24";   
+var myProductName = "pageParkPackage", myVersion = "0.4.25";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -230,6 +230,22 @@ function runScriptsInFolder (nameSubFolder) {
 			child.start ();
 			});
 		}
+	function getMainFromPackageJson (f, callback) { //5/24/20 by DW
+		fs.readFile (f, function (err, jsontext) {
+			if (err) {
+				callback (undefined); 
+				}
+			else {
+				try {
+					var jstruct = JSON.parse (jsontext);
+					callback (jstruct.main); 
+					}
+				catch (err) {
+					callback (undefined); 
+					}
+				}
+			});
+		}
 	function startPersistentApps () {
 		const domainsFolder = environment.serverAppFolder + "/" + domainsPath;
 		console.log ("startPersistentApps: domainsFolder == " + domainsFolder);
@@ -239,9 +255,18 @@ function runScriptsInFolder (nameSubFolder) {
 				if (folderContains (folder, "package.json")) {
 					if (folderContains (folder, "node_modules")) {
 						console.log ("startPersistentApps: folder == " + folder + ", domain == " + domain);
-						loopOverFolder (folder, function (f) {
-							if (utils.endsWith (f, ".js")) {
-								launchAppWithForever (f, domain);
+						getMainFromPackageJson (folder + "/package.json", function (mainval) {
+							if (mainval !== undefined) {
+								var appfile = folder + "/" + mainval;
+								console.log ("startPersistentApps: appfile == " + appfile);
+								launchAppWithForever (appfile, domain);
+								}
+							else {
+								loopOverFolder (folder, function (f) {
+									if (utils.endsWith (f, ".js")) {
+										launchAppWithForever (f, domain);
+										}
+									});
 								}
 							});
 						}
