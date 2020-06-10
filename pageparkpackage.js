@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.25";   
+var myProductName = "pageParkPackage", myVersion = "0.4.27";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -11,6 +11,9 @@ const forever = require ("forever");
 exports.runJavaScriptCode = runJavaScriptCode;
 exports.loopOverFolder = loopOverFolder;
 exports.findAppWithDomain = findAppWithDomain;
+exports.getAppInfo = getAppInfo;
+exports.stopApp = stopApp;
+exports.restartApp = restartApp;
 exports.start = start;
 
 const domainsPath = "domains/";
@@ -81,65 +84,117 @@ function writeJsonFile (path, data) {
 			});
 		});
 	}
-
-function runJavaScriptCode (f, options) { //5/9/20 by DW
-	const system = { //tools that are available to all script code
-		unixShellCommand: function (theCommand) {
-			return (childProcess.execSync (theCommand));
-			}
-		};
-	if (options === undefined) {
-		options = new Object ();
-		}
-	var leftcode = "module.exports = function (options, localStorage, system) {", rightcode = "}";
-	fs.readFile (f, function (err, scripttext) {
-		if (err) {
-			console.log ("runJavaScriptCode: err.message == " + err.message);
-			}
-		else {
-			try {
-				var code = leftcode + scripttext.toString () + rightcode;
-				requireFromString (code) (options, localStorage, system);
+function initLocalStorage (callback) {
+	readJsonFile (config.localStoragePath, function (theData) {
+		if (theData !== undefined) {
+			for (var x in theData) {
+				localStorage [x] = theData [x];
 				}
-			catch (err) {
+			}
+		callback ();
+		});
+	}
+
+//chronologic scripts
+	function runJavaScriptCode (f, options) { //5/9/20 by DW
+		const system = { //tools that are available to all script code
+			unixShellCommand: function (theCommand) {
+				return (childProcess.execSync (theCommand));
+				}
+			};
+		if (options === undefined) {
+			options = new Object ();
+			}
+		var leftcode = "module.exports = function (options, localStorage, system) {", rightcode = "}";
+		fs.readFile (f, function (err, scripttext) {
+			if (err) {
 				console.log ("runJavaScriptCode: err.message == " + err.message);
 				}
-			}
-		});
-	}
-function loopOverFolder (folder, fileCallback) {
-	if (!utils.endsWith (folder, "/")) {
-		folder += "/";
-		}
-	filesystem.sureFilePath (folder + "x", function () {
-		fs.readdir (folder, function (err, theListOfFiles) {
-			if (err) {
-				console.log ("loopOverFolder: err.message == " + err.message);
-				}
 			else {
-				theListOfFiles.forEach (function (fname) {
-					fileCallback (folder + fname);
-					});
+				try {
+					var code = leftcode + scripttext.toString () + rightcode;
+					requireFromString (code) (options, localStorage, system);
+					}
+				catch (err) {
+					console.log ("runJavaScriptCode: err.message == " + err.message);
+					}
 				}
 			});
-		});
-	}
-function runScriptsInFolder (nameSubFolder) {
-	const subfolder = config.scriptsFolderPath + nameSubFolder + "/";
-	loopOverFolder (subfolder, function (f) {
-		if (utils.endsWith (f, ".js")) {
-			runJavaScriptCode (f);
+		}
+	function loopOverFolder (folder, fileCallback) {
+		if (!utils.endsWith (folder, "/")) {
+			folder += "/";
 			}
-		});
-	}
-
-
+		filesystem.sureFilePath (folder + "x", function () {
+			fs.readdir (folder, function (err, theListOfFiles) {
+				if (err) {
+					console.log ("loopOverFolder: err.message == " + err.message);
+					}
+				else {
+					theListOfFiles.forEach (function (fname) {
+						fileCallback (folder + fname);
+						});
+					}
+				});
+			});
+		}
+	function runScriptsInFolder (nameSubFolder) {
+		const subfolder = config.scriptsFolderPath + nameSubFolder + "/";
+		loopOverFolder (subfolder, function (f) {
+			if (utils.endsWith (f, ".js")) {
+				runJavaScriptCode (f);
+				}
+			});
+		}
+	function initChronologicFolders () {
+		function doFolder (name) {
+			filesystem.sureFilePath (config.scriptsFolderPath + name + "/x");
+			}
+		doFolder (nameEverySecondFolder);
+		doFolder (nameEveryMinuteFolder);
+		doFolder (nameEveryHourFolder);
+		doFolder (nameOvernightFolder);
+		}
 //persistent scripts 
 	var appInfo = { //each sub-object starts with a config and stats sub-object, name of subobject is full path to app .js file
 		};
 	
+	function getLogFile (f) {
+		var f = environment.logsFolder + utils.stringPopExtension (fileFromPath (f)) + ".txt";
+		return (f);
+		}
+	function getAppInfo (callback) { //exported, so higher level code has access to info about the currently-running Node apps
+		forever.list (false, function (err, list) {
+			if (err) {
+				callback (err);
+				}
+			else {
+				var info = new Array ();
+				list.forEach (function (foreverItem) {
+					var newItem = new Object ();
+					for (x in appInfo) {
+						if (x == foreverItem.file) {
+							var ourItem = appInfo [x];
+							newItem.domain = ourItem.stats.domain;
+							newItem.port = ourItem.stats.port;
+							}
+						}
+					newItem.ctime = foreverItem.ctime;
+					newItem.file = foreverItem.file;
+					newItem.ctime = foreverItem.ctime;
+					newItem.foreverPid = foreverItem.foreverPid;
+					newItem.pid = foreverItem.pid;
+					newItem.running = foreverItem.running;
+					newItem.restarts = foreverItem.restarts;
+					newItem.logfile = getLogFile (foreverItem.file);
+					info.push (newItem);
+					});
+				callback (undefined, info);
+				}
+			});
+		}
 	function addToLogFile (appFile, linetext) { 
-		var f = environment.dataFolder + "logs/" + utils.stringPopExtension (fileFromPath (appFile)) + ".txt";
+		var f = getLogFile (appFile);
 		utils.sureFilePath (f, function () {
 			fs.readFile (f, function (err, filetext) {
 				if (err) {
@@ -181,30 +236,20 @@ function runScriptsInFolder (nameSubFolder) {
 			});
 		}
 	function launchAppWithForever (f, domain) {
-		var appfolder = folderFromPath (f);
-		var options = {
-			max: 3,
-			silent: true,
-			sourceDir: appfolder,
-			cwd: appfolder,
-			env: {
-				PORT: nextPortToAllocate++
-				},
-			args: []
-			};
-		readAppConfigFile (f, function (theConfig) {
-			if (theConfig !== undefined) {
-				if (theConfig.forever !== undefined) {
-					try {
-						for (var x in theConfig.forever) {
-							options [x] = theConfig.forever [x];
-							}
-						}
-					catch (err) {
-						console.log ("launchAppWithForever: config.forever must be an object.");
-						}
-					}
-				appInfo [f] = {
+		if (appInfo [f] === undefined) { //5/24/20 by DW
+			var appfolder = folderFromPath (f);
+			var options = {
+				max: 3,
+				silent: true,
+				sourceDir: appfolder,
+				cwd: appfolder,
+				env: {
+					PORT: nextPortToAllocate++
+					},
+				args: []
+				};
+			readAppConfigFile (f, function (theConfig) {
+				var theAppInfo = {
 					config: theConfig,
 					stats: {
 						appfile: f,
@@ -212,23 +257,40 @@ function runScriptsInFolder (nameSubFolder) {
 						domain
 						}
 					};
-				}
-			var child = new (foreverMonitor.Monitor) (fileFromPath (f), options);
-			forever.startServer (child); 
-			child.on ('exit', function () {
-				console.log (f + " has exited after " + options.max + " restarts.");
+				if (theConfig !== undefined) {
+					if (theConfig.forever !== undefined) { //copy elements of config.forever into options, to be transmitted to forever
+						try {
+							for (var x in theConfig.forever) {
+								options [x] = theConfig.forever [x];
+								}
+							}
+						catch (err) {
+							console.log ("launchAppWithForever: config.forever must be an object.");
+							}
+						}
+					theAppInfo.config = theConfig;
+					}
+				var child = new (foreverMonitor.Monitor) (fileFromPath (f), options);
+				forever.startServer (child); 
+				console.log ("launchAppWithForever: domain == " + domain);
+				child.on ('exit', function () {
+					console.log ("child.on.exit: " + f + " has exited.");
+					});
+				child.on ("error", function (err) {
+					console.log ("child.on.error: " + utils.trimWhitespace (err.toString ()));
+					});
+				child.on ("stdout", function (linetext) { 
+					addToLogFile (f, linetext);
+					console.log ("child.on.stdout: " + utils.trimWhitespace (linetext.toString ()));
+					});
+				child.on ("stderr", function (data) { 
+					console.log ("child.on.stderr: " + data.toString ());
+					});
+				child.start ();
+				theAppInfo.child = child;
+				appInfo [f] = theAppInfo;
 				});
-			child.on ("error", function (err) {
-				console.log (utils.trimWhitespace (err.toString ()));
-				});
-			child.on ("stdout", function (linetext) { 
-				addToLogFile (f, linetext);
-				});
-			child.on ("stderr", function (data) { 
-				console.log (data.toString ());
-				});
-			child.start ();
-			});
+			}
 		}
 	function getMainFromPackageJson (f, callback) { //5/24/20 by DW
 		fs.readFile (f, function (err, jsontext) {
@@ -248,17 +310,14 @@ function runScriptsInFolder (nameSubFolder) {
 		}
 	function startPersistentApps () {
 		const domainsFolder = environment.serverAppFolder + "/" + domainsPath;
-		console.log ("startPersistentApps: domainsFolder == " + domainsFolder);
 		loopOverFolder (domainsFolder, function (folder) {
 			if (utils.isFolder (folder)) {
 				const domain = fileFromPath (folder);
 				if (folderContains (folder, "package.json")) {
 					if (folderContains (folder, "node_modules")) {
-						console.log ("startPersistentApps: folder == " + folder + ", domain == " + domain);
 						getMainFromPackageJson (folder + "/package.json", function (mainval) {
 							if (mainval !== undefined) {
 								var appfile = folder + "/" + mainval;
-								console.log ("startPersistentApps: appfile == " + appfile);
 								launchAppWithForever (appfile, domain);
 								}
 							else {
@@ -274,28 +333,38 @@ function runScriptsInFolder (nameSubFolder) {
 				}
 			});
 		}
-
-function initChronologicFolders () {
-	function doFolder (name) {
-		filesystem.sureFilePath (config.scriptsFolderPath + name + "/x");
-		}
-	doFolder (nameEverySecondFolder);
-	doFolder (nameEveryMinuteFolder);
-	doFolder (nameEveryHourFolder);
-	doFolder (nameOvernightFolder);
-	}
-function initLocalStorage (callback) {
-	readJsonFile (config.localStoragePath, function (theData) {
-		if (theData !== undefined) {
-			for (var x in theData) {
-				localStorage [x] = theData [x];
+	function stopApp (f, callback) { //6/3/20 by DW
+		console.log ("stopApp: f == " + f);
+		for (x in appInfo) {
+			if (x == f) {
+				var app = appInfo [x];
+				var stophandler = app.child.stop ();
+				stophandler.on ("stop", function (param) {
+					callback (undefined, "The app has exited.");
+					});
+					
+				app.child.on ("error", function (errorMessage) {
+					callback ("The app has failed to stop.");
+					});
 				}
 			}
-		callback ();
-		});
-	}
+		}
+	function restartApp (f, callback) { //6/3/20 by DW
+		console.log ("restartApp: f == " + f);
+		for (x in appInfo) {
+			if (x == f) {
+				var app = appInfo [x];
+				app.child.start ();
+				console.log ("restartApp: app == " + utils.jsonStringify (app));
+				callback (undefined, "The app was restarted.")
+				}
+			}
+		}
+
 function everySecond () {
-	runScriptsInFolder (nameEverySecondFolder);
+	if (config.flRunChronologicalScripts) {
+		runScriptsInFolder (nameEverySecondFolder);
+		}
 	writeJsonFile (config.localStoragePath, localStorage);
 	}
 function everyMinute () {
@@ -303,14 +372,19 @@ function everyMinute () {
 	if (now.getMinutes () == config.minuteToRunHourlyScripts) {
 		everyHour ();
 		}
-	runScriptsInFolder (nameEveryMinuteFolder);
+	if (config.flRunChronologicalScripts) {
+		runScriptsInFolder (nameEveryMinuteFolder);
+		}
+	startPersistentApps (); //launch any that aren't already running --5/24/20 by DW
 	}
 function everyHour () {
-	var now = new Date ();
-	if (now.getHours () == config.hourToRunOvernightScripts) {
-		runScriptsInFolder (nameOvernightFolder);
+	if (config.flRunChronologicalScripts) {
+		var now = new Date ();
+		if (now.getHours () == config.hourToRunOvernightScripts) {
+			runScriptsInFolder (nameOvernightFolder);
+			}
+		runScriptsInFolder (nameEveryHourFolder);
 		}
-	runScriptsInFolder (nameEveryHourFolder);
 	}
 
 function start (env, options, callback) {
@@ -334,12 +408,13 @@ function start (env, options, callback) {
 		}
 	if (config.flRunChronologicalScripts) {
 		initChronologicFolders ();
-		setInterval (everySecond, 1000); 
-		utils.runEveryMinute (everyMinute);
 		}
 	if (config.flRunPersistentScripts) {
 		startPersistentApps ();
 		}
+	
+	setInterval (everySecond, 1000); 
+	utils.runEveryMinute (everyMinute);
 	
 	initLocalStorage (function () {
 		if (callback !== undefined) {
