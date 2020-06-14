@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.27";   
+var myProductName = "pageParkPackage", myVersion = "0.4.28";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -162,6 +162,25 @@ function initLocalStorage (callback) {
 	function getLogFile (f) {
 		var f = environment.logsFolder + utils.stringPopExtension (fileFromPath (f)) + ".txt";
 		return (f);
+		}
+	function getForeverInfoAboutApp (f, callback) { //6/13/20 by DW
+		forever.list (false, function (err, list) {
+			if (err) {
+				callback (err);
+				}
+			else {
+				var flfound = false;
+				list.forEach (function (foreverItem) {
+					if (foreverItem.file == f) {
+						callback (undefined, foreverItem);
+						flfound = true;
+						}
+					});
+				if (!flfound) {
+					callback ({"message": "The app wasn't found."});
+					}
+				}
+			});
 		}
 	function getAppInfo (callback) { //exported, so higher level code has access to info about the currently-running Node apps
 		forever.list (false, function (err, list) {
@@ -350,15 +369,22 @@ function initLocalStorage (callback) {
 			}
 		}
 	function restartApp (f, callback) { //6/3/20 by DW
-		console.log ("restartApp: f == " + f);
-		for (x in appInfo) {
-			if (x == f) {
-				var app = appInfo [x];
-				app.child.start ();
-				console.log ("restartApp: app == " + utils.jsonStringify (app));
-				callback (undefined, "The app was restarted.")
+		getForeverInfoAboutApp (f, function (err, foreverInfo) {
+			if (err) {
+				callback (err);
 				}
-			}
+			else {
+				console.log ("restartApp: f == " + f + ", foreverInfo.pid == " + foreverInfo.pid);
+				try {
+					process.kill (foreverInfo.pid);
+					callback (undefined, foreverInfo.pid.toString ())
+					}
+				catch (err) {
+					console.log ("restartApp: err.message == " + err.message);
+					callback (err)
+					}
+				}
+			});
 		}
 
 function everySecond () {
