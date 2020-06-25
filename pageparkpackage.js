@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.28";   
+var myProductName = "pageParkPackage", myVersion = "0.4.34";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -16,6 +16,7 @@ exports.stopApp = stopApp;
 exports.restartApp = restartApp;
 exports.start = start;
 
+
 const domainsPath = "domains/";
 
 const nameEverySecondFolder = "everySecond";
@@ -32,6 +33,8 @@ var config = {
 	localStoragePath: "prefs/localStorage.json",
 	portToStartAllocating: 1670,
 	maxLogFileSize: 1024 * 100,
+	defaultMaxRestarts: 1000000,
+	defaultSilent: true
 	};
 var environment = { //supplied by the shell
 	};
@@ -40,6 +43,8 @@ var nextPortToAllocate;
 
 var localStorage = {
 	};
+
+const whenStart = new Date (); //6/25/20 by DW
 
 function fileFromPath (f) {
 	return (utils.stringLastField (f, "/"));
@@ -256,10 +261,11 @@ function initLocalStorage (callback) {
 		}
 	function launchAppWithForever (f, domain) {
 		if (appInfo [f] === undefined) { //5/24/20 by DW
+			appInfo [f] = true; //make sure it's defined immediately -- 6/25/20 by DW
 			var appfolder = folderFromPath (f);
 			var options = {
-				max: 3,
-				silent: true,
+				max: config.defaultMaxRestarts,
+				silent: config.defaultSilent,
 				sourceDir: appfolder,
 				cwd: appfolder,
 				env: {
@@ -289,25 +295,31 @@ function initLocalStorage (callback) {
 						}
 					theAppInfo.config = theConfig;
 					}
-				var child = new (foreverMonitor.Monitor) (fileFromPath (f), options);
-				forever.startServer (child); 
-				console.log ("launchAppWithForever: domain == " + domain);
-				child.on ('exit', function () {
-					console.log ("child.on.exit: " + f + " has exited.");
-					});
-				child.on ("error", function (err) {
-					console.log ("child.on.error: " + utils.trimWhitespace (err.toString ()));
-					});
-				child.on ("stdout", function (linetext) { 
-					addToLogFile (f, linetext);
-					console.log ("child.on.stdout: " + utils.trimWhitespace (linetext.toString ()));
-					});
-				child.on ("stderr", function (data) { 
-					console.log ("child.on.stderr: " + data.toString ());
-					});
-				child.start ();
-				theAppInfo.child = child;
-				appInfo [f] = theAppInfo;
+				
+				try { //6/21/20 by DW -- move all the forever-related stuff into a try
+					var child = new (foreverMonitor.Monitor) (fileFromPath (f), options);
+					forever.startServer (child); 
+					console.log ("launchAppWithForever: domain == " + domain);
+					
+					child.on ("stdout", function (linetext) { 
+						addToLogFile (f, linetext);
+						});
+					child.on ("stderr", function (data) { 
+						addToLogFile (f, "pagePark on stderr: " + data.toString ());
+						});
+					child.on ("error", function (err) {
+						addToLogFile (f, "pagePark on error: " + utils.trimWhitespace (err.toString ()));
+						});
+					child.on ("exit", function () {
+						addToLogFile (f, "pagePark on exit: f == " + f + "\n");
+						});
+					child.start ();
+					theAppInfo.child = child;
+					appInfo [f] = theAppInfo;
+					}
+				catch (err) {
+					console.log ("launchAppWithForever: err.message == " + err.message);
+					}
 				});
 			}
 		}
@@ -338,13 +350,6 @@ function initLocalStorage (callback) {
 							if (mainval !== undefined) {
 								var appfile = folder + "/" + mainval;
 								launchAppWithForever (appfile, domain);
-								}
-							else {
-								loopOverFolder (folder, function (f) {
-									if (utils.endsWith (f, ".js")) {
-										launchAppWithForever (f, domain);
-										}
-									});
 								}
 							});
 						}
@@ -401,7 +406,11 @@ function everyMinute () {
 	if (config.flRunChronologicalScripts) {
 		runScriptsInFolder (nameEveryMinuteFolder);
 		}
-	startPersistentApps (); //launch any that aren't already running --5/24/20 by DW
+	if (config.flRunPersistentScripts) {
+		if (utils.secondsSince (whenStart) > 60) { //6/25/20 by DW
+			startPersistentApps ();
+			}
+		}
 	}
 function everyHour () {
 	if (config.flRunChronologicalScripts) {
@@ -429,16 +438,10 @@ function start (env, options, callback) {
 	
 	if (config.flRunChronologicalScripts) {
 		initChronologicFolders ();
-		setInterval (everySecond, 1000); 
-		utils.runEveryMinute (everyMinute);
-		}
-	if (config.flRunChronologicalScripts) {
-		initChronologicFolders ();
 		}
 	if (config.flRunPersistentScripts) {
 		startPersistentApps ();
 		}
-	
 	setInterval (everySecond, 1000); 
 	utils.runEveryMinute (everyMinute);
 	
