@@ -1,8 +1,8 @@
 {
-	"name": "pagepark",
+	"name": "pagepark", 
 	"description": "Core routines for the PagePark web server, in a package.",
 	"author": "Dave Winer <dave@scripting.com>",
-	"version": "0.4.34",
+	"version": "0.4.38",
 	"main": "pageparkpackage.js",
 	"files": [
 		"pageparkpackage.js",

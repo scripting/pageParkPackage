@@ -1,4 +1,4 @@
-var myProductName = "pageParkPackage", myVersion = "0.4.34";   
+var myProductName = "pageParkPackage", myVersion = "0.4.38";   
 
 const fs = require ("fs"); 
 const utils = require ("daveutils");
@@ -14,8 +14,8 @@ exports.findAppWithDomain = findAppWithDomain;
 exports.getAppInfo = getAppInfo;
 exports.stopApp = stopApp;
 exports.restartApp = restartApp;
+exports.startPersistentApps = startPersistentApps; //7/4/20 by DW
 exports.start = start;
-
 
 const domainsPath = "domains/";
 
@@ -201,6 +201,8 @@ function initLocalStorage (callback) {
 							var ourItem = appInfo [x];
 							newItem.domain = ourItem.stats.domain;
 							newItem.port = ourItem.stats.port;
+							newItem.ctHits = ourItem.stats.ctHits;
+							newItem.whenLastHit = ourItem.stats.whenLastHit;
 							}
 						}
 					newItem.ctime = foreverItem.ctime;
@@ -240,12 +242,19 @@ function initLocalStorage (callback) {
 		const folder = config.scriptsFolderPath + namePersistentFolder + "/";
 		return (folder);
 		}
-	function findAppWithDomain (domain) {
+	function findAppWithDomain (domain, flBumpHitCount) {
+		var now = new Date ();
+		flBumpHitCount = (flBumpHitCount === undefined) ? true : flBumpHitCount; //6/27/20 by DW
 		domain = utils.stringLower (domain);
 		for (var x in appInfo) {
 			var item = appInfo [x];
 			if (item.stats.domain !== undefined) {
-				if (utils.stringLower (item.stats.domain) == domain) {
+				const flmatch = utils.endsWith (domain, item.stats.domain);
+				if (flmatch) { //7/15/20 by DW -- if (utils.stringLower (item.stats.domain) == domain) {
+					if (flBumpHitCount) {
+						item.stats.ctHits++;
+						item.stats.whenLastHit = now;
+						}
 					return (item.stats.port);
 					}
 				}
@@ -279,7 +288,8 @@ function initLocalStorage (callback) {
 					stats: {
 						appfile: f,
 						port: options.env.PORT,
-						domain
+						domain,
+						ctHits: 0, whenLastHit: new Date (0)
 						}
 					};
 				if (theConfig !== undefined) {
@@ -326,36 +336,49 @@ function initLocalStorage (callback) {
 	function getMainFromPackageJson (f, callback) { //5/24/20 by DW
 		fs.readFile (f, function (err, jsontext) {
 			if (err) {
+				console.log ("getMainFromPackageJson: f == " + f + ", err.message == " + err.message);
 				callback (undefined); 
 				}
 			else {
 				try {
 					var jstruct = JSON.parse (jsontext);
+					console.log ("getMainFromPackageJson: f == " + f + ", jstruct.main == " + jstruct.main);
+					if (jstruct.main === undefined) {
+						console.log ("getMainFromPackageJson: f == " + f + ", jstruct == " + utils.jsonStringify (jstruct));
+						}
 					callback (jstruct.main); 
 					}
 				catch (err) {
+					console.log ("getMainFromPackageJson: f == " + f + ", err.message == " + err.message);
 					callback (undefined); 
 					}
 				}
 			});
 		}
-	function startPersistentApps () {
+	function startPersistentApps (callback) { //search the domains folder for apps that aren't yet running and try to launch them
 		const domainsFolder = environment.serverAppFolder + "/" + domainsPath;
+		var launchList = new Array ();
 		loopOverFolder (domainsFolder, function (folder) {
 			if (utils.isFolder (folder)) {
 				const domain = fileFromPath (folder);
-				if (folderContains (folder, "package.json")) {
-					if (folderContains (folder, "node_modules")) {
-						getMainFromPackageJson (folder + "/package.json", function (mainval) {
-							if (mainval !== undefined) {
-								var appfile = folder + "/" + mainval;
-								launchAppWithForever (appfile, domain);
-								}
-							});
+				if (!findAppWithDomain (domain, false)) { //6/27/20 by DW
+					if (folderContains (folder, "package.json")) {
+						if (folderContains (folder, "node_modules")) {
+							getMainFromPackageJson (folder + "/package.json", function (mainval) {
+								if (mainval !== undefined) {
+									var appfile = folder + "/" + mainval;
+									launchAppWithForever (appfile, domain);
+									launchList.push ({appfile});
+									}
+								});
+							}
 						}
 					}
 				}
 			});
+		if (callback !== undefined) {
+			callback (launchList);
+			}
 		}
 	function stopApp (f, callback) { //6/3/20 by DW
 		console.log ("stopApp: f == " + f);
@@ -405,11 +428,6 @@ function everyMinute () {
 		}
 	if (config.flRunChronologicalScripts) {
 		runScriptsInFolder (nameEveryMinuteFolder);
-		}
-	if (config.flRunPersistentScripts) {
-		if (utils.secondsSince (whenStart) > 60) { //6/25/20 by DW
-			startPersistentApps ();
-			}
 		}
 	}
 function everyHour () {
